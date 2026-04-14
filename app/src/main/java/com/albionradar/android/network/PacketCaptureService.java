@@ -28,8 +28,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -112,7 +111,11 @@ public class PacketCaptureService extends VpnService {
                 .addRoute("0.0.0.0", 0);
 
         // Allow Albion traffic
-        builder.addAllowedApplication("com.albiononline.AlbionOnline");
+        try {
+            builder.addAllowedApplication("com.albiononline.AlbionOnline");
+        } catch (Exception e) {
+            Log.w(TAG, "Could not restrict to Albion app: " + e.getMessage());
+        }
 
         try {
             vpnInterface = builder.establish();
@@ -166,7 +169,6 @@ public class PacketCaptureService extends VpnService {
         FileInputStream in = new FileInputStream(vpnInterface.getFileDescriptor());
         FileOutputStream out = new FileOutputStream(vpnInterface.getFileDescriptor());
 
-        ByteBuffer buffer = ByteBuffer.allocate(32767);
         byte[] packet = new byte[32767];
 
         while (running && !Thread.currentThread().isInterrupted()) {
@@ -313,4 +315,4 @@ public class PacketCaptureService extends VpnService {
                         "Stop", stopPendingIntent)
                 .build();
     }
-          }
+}
