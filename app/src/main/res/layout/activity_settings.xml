@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#1a1a2e"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Header -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Settings"
+            android:textColor="#ffffff"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Server Settings -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Server Configuration"
+            android:textColor="#4CAF50"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <EditText
+                android:id="@+id/serverIpEdit"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="2"
+                android:hint="Server IP (auto)"
+                android:textColor="#ffffff"
+                android:textColorHint="#666666"
+                android:background="#2a2a3e"
+                android:padding="12dp"
+                android:layout_marginEnd="8dp" />
+
+            <EditText
+                android:id="@+id/serverPortEdit"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:hint="Port"
+                android:inputType="number"
+                android:textColor="#ffffff"
+                android:textColorHint="#666666"
+                android:background="#2a2a3e"
+                android:padding="12dp"
+                android:text="5056" />
+        </LinearLayout>
+
+        <!-- Radar Range -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Radar Range"
+            android:textColor="#4CAF50"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+
+            <SeekBar
+                android:id="@+id/rangeSeekBar"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:max="100"
+                android:progress="50" />
+
+            <TextView
+                android:id="@+id/rangeValueText"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="50 units"
+                android:textColor="#ffffff"
+                android:textSize="14sp"
+                android:gravity="end" />
+        </LinearLayout>
+
+        <!-- Display Options -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Display Options"
+            android:textColor="#4CAF50"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <CheckBox
+            android:id="@+id/showResourcesCheck"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Show Resources"
+            android:textColor="#ffffff"
+            android:checked="true" />
+
+        <CheckBox
+            android:id="@+id/showMobsCheck"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Show Mobs"
+            android:textColor="#ffffff"
+            android:checked="true" />
+
+        <CheckBox
+            android:id="@+id/showPlayersCheck"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Show Players"
+            android:textColor="#ffffff"
+            android:checked="true" />
+
+        <CheckBox
+            android:id="@+id/showEventsCheck"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Show Events"
+            android:textColor="#ffffff"
+            android:checked="true" />
+
+        <!-- Debug Options -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Debug Options"
+            android:textColor="#4CAF50"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
+        <CheckBox
+            android:id="@+id/recordPcapCheck"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Record PCAP"
+            android:textColor="#ffffff"
+            android:checked="false" />
+
+        <CheckBox
+            android:id="@+id/debugModeCheck"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Debug Mode"
+            android:textColor="#ffffff"
+            android:checked="false" />
+
+        <!-- Info -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Protocol: GpBinaryV18 (Photon)"
+            android:textColor="#666666"
+            android:textSize="12sp"
+            android:layout_marginTop="24dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Target: Albion Online Android"
+            android:textColor="#666666"
+            android:textSize="12sp"
+            android:layout_marginTop="4dp" />
+
+    </LinearLayout>
+
+</ScrollView>
