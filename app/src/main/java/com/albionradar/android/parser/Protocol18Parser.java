@@ -338,7 +338,7 @@ public class Protocol18Parser {
             default:
                 // Check for array type (0x40 OR'd with element type)
                 if ((typeCode & TYPE_ARRAY_MARKER) != 0) {
-                    return readArray(typeCode & 0x3F);
+                    return readArray(typeCode & 0x3F));  //
                 }
                 Log.w(TAG, "Unknown type code: " + typeCode);
                 return null;
