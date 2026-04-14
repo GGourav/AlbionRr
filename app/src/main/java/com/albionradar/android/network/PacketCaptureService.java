@@ -25,8 +25,6 @@ import com.albionradar.android.parser.Protocol18Parser;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -78,14 +76,16 @@ public class PacketCaptureService extends VpnService {
         debugMode = prefs.getBoolean("debug_mode", false);
 
         createNotificationChannel();
-        registerReceiver(stopReceiver, new IntentFilter(ACTION_STOP));
+        
+        IntentFilter filter = new IntentFilter(ACTION_STOP);
+        registerReceiver(stopReceiver, filter);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (ACTION_START.equals(intent.getAction())) {
+        if (intent != null && ACTION_START.equals(intent.getAction())) {
             startCapture();
-        } else if (ACTION_STOP.equals(intent.getAction())) {
+        } else if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             stopCapture();
         }
         return START_STICKY;
@@ -95,7 +95,11 @@ public class PacketCaptureService extends VpnService {
     public void onDestroy() {
         super.onDestroy();
         stopCapture();
-        unregisterReceiver(stopReceiver);
+        try {
+            unregisterReceiver(stopReceiver);
+        } catch (Exception e) {
+            // Ignore
+        }
     }
 
     private void startCapture() {
@@ -110,24 +114,25 @@ public class PacketCaptureService extends VpnService {
                 .addAddress("10.0.0.2", 32)
                 .addRoute("0.0.0.0", 0);
 
-        // Allow Albion traffic
+        // Try to restrict to Albion app only (optional)
         try {
             builder.addAllowedApplication("com.albiononline.AlbionOnline");
         } catch (Exception e) {
-            Log.w(TAG, "Could not restrict to Albion app: " + e.getMessage());
+            Log.w(TAG, "Could not restrict VPN to Albion app: " + e.getMessage());
+            // Continue without app restriction - VPN will capture all traffic
         }
 
         try {
             vpnInterface = builder.establish();
         } catch (Exception e) {
             Log.e(TAG, "Failed to establish VPN: " + e.getMessage());
-            stopSelf();
+            stopCapture();
             return;
         }
 
         if (vpnInterface == null) {
-            Log.e(TAG, "VPN interface is null");
-            stopSelf();
+            Log.e(TAG, "VPN interface is null - permission may be revoked");
+            stopCapture();
             return;
         }
 
@@ -175,7 +180,11 @@ public class PacketCaptureService extends VpnService {
             try {
                 // Read packet
                 int length = in.read(packet);
-                if (length <= 0) continue;
+                if (length <= 0) {
+                    // Small delay to avoid busy loop
+                    Thread.sleep(1);
+                    continue;
+                }
 
                 // Parse IP packet
                 if (length < 20) continue; // Minimum IP header size
@@ -185,7 +194,11 @@ public class PacketCaptureService extends VpnService {
 
                 // Get protocol (UDP = 17)
                 int protocol = packet[9] & 0xFF;
-                if (protocol != 17) continue;
+                if (protocol != 17) {
+                    // Forward non-UDP traffic
+                    out.write(packet, 0, length);
+                    continue;
+                }
 
                 // Get source and destination ports
                 int ipHeaderLength = (packet[0] & 0x0F) * 4;
@@ -205,8 +218,10 @@ public class PacketCaptureService extends VpnService {
                         byte[] payload = new byte[payloadLength];
                         System.arraycopy(packet, payloadStart, payload, 0, payloadLength);
 
-                        // Parse Photon packet
-                        parsePhotonPacket(payload, dstPort == ALBION_PORT);
+                        // Parse Photon packet (only server responses)
+                        if (srcPort == ALBION_PORT) {
+                            parsePhotonPacket(payload);
+                        }
                     }
                 }
 
@@ -217,6 +232,9 @@ public class PacketCaptureService extends VpnService {
                 if (running) {
                     Log.e(TAG, "Error reading packet: " + e.getMessage());
                 }
+            } catch (InterruptedException e) {
+                // Thread interrupted, exit
+                break;
             }
         }
 
@@ -228,33 +246,31 @@ public class PacketCaptureService extends VpnService {
         }
     }
 
-    private void parsePhotonPacket(byte[] payload, boolean isOutgoing) {
+    private void parsePhotonPacket(byte[] payload) {
         try {
-            // Only process incoming packets (server responses)
-            if (!isOutgoing) {
-                List<EntityInfo> entities = parser.parsePacket(payload);
+            List<EntityInfo> entities = parser.parsePacket(payload);
 
-                for (EntityInfo entity : entities) {
-                    if (!entity.isValid()) {
-                        // Entity left - remove from map
-                        entityMap.remove(entity.getId());
-                    } else {
-                        // Update or add entity
-                        entityMap.put(entity.getId(), entity);
+            if (entities.isEmpty()) return;
 
-                        // Track player entity (spawned at reasonable position)
-                        if (entity.getType() == EntityInfo.EntityType.PLAYER &&
-                            entity.getX() != 999999 && entity.getY() != 999999) {
-                            playerEntity = entity;
-                        }
+            for (EntityInfo entity : entities) {
+                if (!entity.isValid()) {
+                    // Entity left - remove from map
+                    entityMap.remove(entity.getId());
+                } else {
+                    // Update or add entity
+                    entityMap.put(entity.getId(), entity);
+
+                    // Track player entity
+                    if (entity.getType() == EntityInfo.EntityType.PLAYER &&
+                        entity.getX() != 999999 && entity.getY() != 999999) {
+                        playerEntity = entity;
                     }
                 }
-
-                // Broadcast updates
-                if (!entities.isEmpty()) {
-                    broadcastEntityUpdate();
-                }
             }
+
+            // Broadcast updates
+            broadcastEntityUpdate();
+
         } catch (Exception e) {
             Log.e(TAG, "Error parsing Photon packet: " + e.getMessage());
         }
@@ -274,7 +290,11 @@ public class PacketCaptureService extends VpnService {
             intent.putExtra(EXTRA_PLAYER, playerEntity);
         }
 
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+        try {
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+        } catch (Exception e) {
+            Log.e(TAG, "Error broadcasting entity update: " + e.getMessage());
+        }
     }
 
     private void createNotificationChannel() {
