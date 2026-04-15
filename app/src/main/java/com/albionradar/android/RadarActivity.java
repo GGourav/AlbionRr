@@ -7,6 +7,7 @@ import android.content.IntentFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
@@ -56,51 +57,99 @@ public class RadarActivity extends AppCompatActivity {
     private RadarView radarView;
     private List<EntityInfo> entities = new ArrayList<>();
     private EntityInfo playerEntity;
-
-    private BroadcastReceiver entityReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (PacketCaptureService.ACTION_ENTITY_UPDATE.equals(intent.getAction())) {
-                ArrayList<EntityInfo> updatedEntities = 
-                    intent.getParcelableArrayListExtra(PacketCaptureService.EXTRA_ENTITIES);
-                if (updatedEntities != null) {
-                    entities.clear();
-                    entities.addAll(updatedEntities);
-                    radarView.invalidate();
-                }
-
-                EntityInfo player = intent.getParcelableExtra(PacketCaptureService.EXTRA_PLAYER);
-                if (player != null) {
-                    playerEntity = player;
-                }
-            }
-        }
-    };
+    private BroadcastReceiver entityReceiver;
+    private boolean receiverRegistered = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        radarView = new RadarView(this);
-        setContentView(radarView);
-        Log.i(TAG, "RadarActivity created");
+        Log.i(TAG, "RadarActivity onCreate");
+        
+        try {
+            radarView = new RadarView(this);
+            setContentView(radarView);
+            Log.i(TAG, "RadarActivity created successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Error creating radar view: " + e.getMessage());
+            finish();
+        }
     }
 
     @Override
     protected void onStart() {
         super.onStart();
-        IntentFilter filter = new IntentFilter(PacketCaptureService.ACTION_ENTITY_UPDATE);
-        registerReceiver(entityReceiver, filter);
-        Log.i(TAG, "Broadcast receiver registered");
+        Log.i(TAG, "RadarActivity onStart");
+        registerEntityReceiver();
     }
 
     @Override
     protected void onStop() {
         super.onStop();
+        Log.i(TAG, "RadarActivity onStop");
+        unregisterEntityReceiver();
+    }
+
+    private void registerEntityReceiver() {
+        if (receiverRegistered) {
+            return;
+        }
+        
+        try {
+            entityReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (PacketCaptureService.ACTION_ENTITY_UPDATE.equals(intent.getAction())) {
+                        try {
+                            ArrayList<EntityInfo> updatedEntities = 
+                                intent.getParcelableArrayListExtra(PacketCaptureService.EXTRA_ENTITIES);
+                            if (updatedEntities != null) {
+                                entities.clear();
+                                entities.addAll(updatedEntities);
+                                if (radarView != null) {
+                                    radarView.invalidate();
+                                }
+                            }
+
+                            EntityInfo player = intent.getParcelableExtra(PacketCaptureService.EXTRA_PLAYER);
+                            if (player != null) {
+                                playerEntity = player;
+                            }
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error processing entity update: " + e.getMessage());
+                        }
+                    }
+                }
+            };
+
+            IntentFilter filter = new IntentFilter(PacketCaptureService.ACTION_ENTITY_UPDATE);
+            
+            // Android 13+ requires explicit export flag
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(entityReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(entityReceiver, filter);
+            }
+            
+            receiverRegistered = true;
+            Log.i(TAG, "Broadcast receiver registered");
+        } catch (Exception e) {
+            Log.e(TAG, "Error registering receiver: " + e.getMessage());
+        }
+    }
+
+    private void unregisterEntityReceiver() {
+        if (!receiverRegistered || entityReceiver == null) {
+            return;
+        }
+        
         try {
             unregisterReceiver(entityReceiver);
+            Log.i(TAG, "Broadcast receiver unregistered");
         } catch (Exception e) {
             Log.w(TAG, "Error unregistering receiver: " + e.getMessage());
         }
+        receiverRegistered = false;
+        entityReceiver = null;
     }
 
     @Override
