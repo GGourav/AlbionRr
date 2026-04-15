@@ -31,19 +31,31 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        Log.i(TAG, "MainActivity onCreate");
+        
+        try {
+            setContentView(R.layout.activity_main);
 
-        startButton = findViewById(R.id.startRadarButton);
-        settingsButton = findViewById(R.id.settingsButton);
-        statusText = findViewById(R.id.subtitleText);
+            startButton = findViewById(R.id.startRadarButton);
+            settingsButton = findViewById(R.id.settingsButton);
+            statusText = findViewById(R.id.subtitleText);
 
-        startButton.setOnClickListener(v -> checkPermissionsAndStart());
-        settingsButton.setOnClickListener(v -> {
-            Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
-            startActivity(intent);
-        });
+            if (startButton != null) {
+                startButton.setOnClickListener(v -> checkPermissionsAndStart());
+            }
+            if (settingsButton != null) {
+                settingsButton.setOnClickListener(v -> {
+                    Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
+                    startActivity(intent);
+                });
+            }
 
-        updateStatus();
+            updateStatus();
+            Log.i(TAG, "MainActivity created successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Error in onCreate: " + e.getMessage());
+            Toast.makeText(this, "Error initializing: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     @Override
@@ -54,27 +66,40 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateStatus() {
         boolean isRunning = isServiceRunning();
-        if (isRunning) {
-            startButton.setText("Open Radar");
-            statusText.setText("Radar is running");
-        } else {
-            startButton.setText("Start Radar");
-            statusText.setText("Entity Detection for Albion Online");
+        if (startButton != null) {
+            if (isRunning) {
+                startButton.setText("Open Radar");
+            } else {
+                startButton.setText("Start Radar");
+            }
+        }
+        if (statusText != null) {
+            if (isRunning) {
+                statusText.setText("Radar is running");
+            } else {
+                statusText.setText("Entity Detection for Albion Online");
+            }
         }
     }
 
     private boolean isServiceRunning() {
-        ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
-        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
-            if (PacketCaptureService.class.getName().equals(service.service.getClassName())) {
-                return true;
+        try {
+            ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            if (manager == null) return false;
+            
+            for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+                if (PacketCaptureService.class.getName().equals(service.service.getClassName())) {
+                    return true;
+                }
             }
+        } catch (Exception e) {
+            Log.e(TAG, "Error checking service: " + e.getMessage());
         }
         return false;
     }
 
     private void checkPermissionsAndStart() {
-        Log.d(TAG, "checkPermissionsAndStart called");
+        Log.i(TAG, "checkPermissionsAndStart called");
 
         // If service is already running, just open radar
         if (isServiceRunning()) {
@@ -83,7 +108,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Request VPN permission
-        Log.d(TAG, "Requesting VPN permission");
+        Log.i(TAG, "Requesting VPN permission");
         requestVpnPermission();
     }
 
@@ -92,8 +117,10 @@ public class MainActivity extends AppCompatActivity {
             Intent vpnIntent = VpnService.prepare(this);
             if (vpnIntent != null) {
                 startActivityForResult(vpnIntent, VPN_REQUEST_CODE);
+                Log.i(TAG, "VPN permission dialog started");
             } else {
                 // VPN already prepared
+                Log.i(TAG, "VPN already prepared, starting service");
                 startRadarService();
             }
         } catch (Exception e) {
@@ -105,19 +132,21 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        Log.d(TAG, "onActivityResult: requestCode=" + requestCode + ", resultCode=" + resultCode);
+        Log.i(TAG, "onActivityResult: requestCode=" + requestCode + ", resultCode=" + resultCode);
 
         if (requestCode == VPN_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
+                Log.i(TAG, "VPN permission granted");
                 startRadarService();
             } else {
+                Log.w(TAG, "VPN permission denied");
                 Toast.makeText(this, "VPN permission denied", Toast.LENGTH_LONG).show();
             }
         }
     }
 
     private void startRadarService() {
-        Log.d(TAG, "Starting radar service");
+        Log.i(TAG, "Starting radar service");
         
         try {
             Intent serviceIntent = new Intent(this, PacketCaptureService.class);
@@ -128,9 +157,13 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 startService(serviceIntent);
             }
+            Log.i(TAG, "Service start requested");
 
             // Give service time to start
-            new android.os.Handler().postDelayed(this::openRadar, 500);
+            new android.os.Handler(getMainLooper()).postDelayed(() -> {
+                Log.i(TAG, "Opening radar activity");
+                openRadar();
+            }, 1000);
 
         } catch (Exception e) {
             Log.e(TAG, "Failed to start service: " + e.getMessage());
@@ -142,8 +175,10 @@ public class MainActivity extends AppCompatActivity {
         try {
             Intent radarIntent = new Intent(MainActivity.this, RadarActivity.class);
             startActivity(radarIntent);
+            Log.i(TAG, "RadarActivity started");
         } catch (Exception e) {
             Log.e(TAG, "Failed to open radar: " + e.getMessage());
+            Toast.makeText(this, "Failed to open radar: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 }
