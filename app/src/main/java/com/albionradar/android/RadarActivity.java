@@ -8,12 +8,12 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.albionradar.android.network.PacketCaptureService;
 import com.albionradar.android.parser.EntityInfo;
@@ -22,21 +22,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Main radar display activity.
+ * Radar display activity.
  * Shows entities on a minimap-style radar overlay.
  */
 public class RadarActivity extends AppCompatActivity {
 
     private static final String TAG = "RadarActivity";
-    
-    // Radar settings
-    private static final int RADAR_RANGE = 50; // In-game coordinate units
-    private static final float PLAYER_SIZE = 8f;
-    private static final float ENTITY_SIZE = 6f;
-    
-    // Tier colors
+    private static final int RADAR_RANGE = 50;
+    private static final float PLAYER_SIZE = 10f;
+    private static final float ENTITY_SIZE = 8f;
+
+    // Tier colors (matching OpenRadar)
     private static final int[] TIER_COLORS = {
-        Color.parseColor("#1a1a1a"), // T1 - Black/Dark Grey
+        Color.parseColor("#1a1a1a"), // T1 - Black
         Color.parseColor("#808080"), // T2 - Grey
         Color.parseColor("#00ff00"), // T3 - Green
         Color.parseColor("#0066ff"), // T4 - Blue
@@ -45,20 +43,20 @@ public class RadarActivity extends AppCompatActivity {
         Color.parseColor("#ffff00"), // T7 - Yellow
         Color.parseColor("#ffffff")  // T8 - White
     };
-    
-    // Enchantment outline colors
+
+    // Enchantment colors (matching OpenRadar)
     private static final int[] ENCHANTMENT_COLORS = {
-        Color.TRANSPARENT,      // No enchantment
+        Color.TRANSPARENT,        // No enchantment
         Color.parseColor("#006600"), // .1 - Dark Green
         Color.parseColor("#000066"), // .2 - Dark Blue
         Color.parseColor("#660066"), // .3 - Purple
         Color.parseColor("#996600")  // .4 - Gold
     };
-    
+
     private RadarView radarView;
     private List<EntityInfo> entities = new ArrayList<>();
     private EntityInfo playerEntity;
-    
+
     private BroadcastReceiver entityReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -68,11 +66,9 @@ public class RadarActivity extends AppCompatActivity {
                 if (updatedEntities != null) {
                     entities.clear();
                     entities.addAll(updatedEntities);
-                    if (radarView != null) {
-                        radarView.invalidate();
-                    }
+                    radarView.invalidate();
                 }
-                
+
                 EntityInfo player = intent.getParcelableExtra(PacketCaptureService.EXTRA_PLAYER);
                 if (player != null) {
                     playerEntity = player;
@@ -86,24 +82,31 @@ public class RadarActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         radarView = new RadarView(this);
         setContentView(radarView);
+        Log.i(TAG, "RadarActivity created");
     }
 
     @Override
     protected void onStart() {
         super.onStart();
         IntentFilter filter = new IntentFilter(PacketCaptureService.ACTION_ENTITY_UPDATE);
-        LocalBroadcastManager.getInstance(this).registerReceiver(entityReceiver, filter);
+        registerReceiver(entityReceiver, filter);
+        Log.i(TAG, "Broadcast receiver registered");
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(entityReceiver);
+        try {
+            unregisterReceiver(entityReceiver);
+        } catch (Exception e) {
+            Log.w(TAG, "Error unregistering receiver: " + e.getMessage());
+        }
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         menu.add(0, 0, 0, "Settings");
+        menu.add(0, 1, 0, "Back");
         return true;
     }
 
@@ -112,20 +115,15 @@ public class RadarActivity extends AppCompatActivity {
         if (item.getItemId() == 0) {
             startActivity(new Intent(this, SettingsActivity.class));
             return true;
+        } else if (item.getItemId() == 1) {
+            finish();
+            return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
-    /**
-     * Custom view for rendering the radar display.
-     */
     private class RadarView extends View {
-        private Paint backgroundPaint;
-        private Paint gridPaint;
-        private Paint playerPaint;
-        private Paint entityPaint;
-        private Paint enchantPaint;
-        private Paint textPaint;
+        private Paint backgroundPaint, gridPaint, playerPaint, entityPaint, enchantPaint, textPaint, borderPaint;
 
         public RadarView(Context context) {
             super(context);
@@ -143,20 +141,28 @@ public class RadarActivity extends AppCompatActivity {
             gridPaint.setStyle(Paint.Style.STROKE);
 
             playerPaint = new Paint();
-            playerPaint.setColor(Color.parseColor("#00ff00"));
+            playerPaint.setColor(Color.parseColor("#00FF00"));
             playerPaint.setStyle(Paint.Style.FILL);
+            playerPaint.setAntiAlias(true);
 
             entityPaint = new Paint();
             entityPaint.setStyle(Paint.Style.FILL);
+            entityPaint.setAntiAlias(true);
 
             enchantPaint = new Paint();
             enchantPaint.setStyle(Paint.Style.STROKE);
-            enchantPaint.setStrokeWidth(2f);
+            enchantPaint.setStrokeWidth(3f);
+            enchantPaint.setAntiAlias(true);
 
             textPaint = new Paint();
             textPaint.setColor(Color.WHITE);
-            textPaint.setTextSize(12f);
+            textPaint.setTextSize(11f);
             textPaint.setAntiAlias(true);
+
+            borderPaint = new Paint();
+            borderPaint.setColor(Color.parseColor("#4CAF50"));
+            borderPaint.setStyle(Paint.Style.STROKE);
+            borderPaint.setStrokeWidth(2f);
         }
 
         @Override
@@ -171,64 +177,105 @@ public class RadarActivity extends AppCompatActivity {
             // Draw background
             canvas.drawRect(0, 0, width, height, backgroundPaint);
 
+            // Draw radar border
+            int radarRadius = Math.min(width, height) / 2 - 10;
+            canvas.drawCircle(centerX, centerY, radarRadius, borderPaint);
+
             // Draw grid
-            drawGrid(canvas, width, height);
+            drawGrid(canvas, width, height, centerX, centerY);
 
             // Draw entities
-            synchronized (entities) {
-                for (EntityInfo entity : entities) {
-                    drawEntity(canvas, entity, centerX, centerY, width, height);
-                }
+            for (EntityInfo entity : entities) {
+                drawEntity(canvas, entity, centerX, centerY, width, height);
             }
 
             // Draw player at center
+            playerPaint.setColor(Color.parseColor("#00FF00"));
             canvas.drawCircle(centerX, centerY, PLAYER_SIZE, playerPaint);
+            canvas.drawCircle(centerX, centerY, PLAYER_SIZE + 2, borderPaint);
             canvas.drawText("YOU", centerX - 15, centerY + 4, textPaint);
+
+            // Draw stats
+            textPaint.setTextSize(12f);
+            canvas.drawText("Entities: " + entities.size(), 10, 25, textPaint);
+            if (playerEntity != null) {
+                canvas.drawText(String.format("Pos: %.1f, %.1f", playerEntity.getX(), playerEntity.getY()), 10, 45, textPaint);
+            }
+            canvas.drawText("Protocol18", 10, height - 10, textPaint);
         }
 
-        private void drawGrid(Canvas canvas, int width, int height) {
+        private void drawGrid(Canvas canvas, int width, int height, int cx, int cy) {
             int step = Math.min(width, height) / 10;
-            for (int x = 0; x < width; x += step) {
-                canvas.drawLine(x, 0, x, height, gridPaint);
+            
+            // Draw concentric circles
+            for (int i = 1; i <= 4; i++) {
+                canvas.drawCircle(cx, cy, step * i, gridPaint);
             }
-            for (int y = 0; y < height; y += step) {
-                canvas.drawLine(0, y, width, y, gridPaint);
-            }
+
+            // Draw cross lines
+            canvas.drawLine(cx, 0, cx, height, gridPaint);
+            canvas.drawLine(0, cy, width, cy, gridPaint);
         }
 
-        private void drawEntity(Canvas canvas, EntityInfo entity, 
-                                int centerX, int centerY, int width, int height) {
-            if (playerEntity == null) return;
-
-            // Calculate relative position
-            float relX = entity.getX() - playerEntity.getX();
-            float relY = entity.getY() - playerEntity.getY();
-
-            // Scale to screen coordinates
+        private void drawEntity(Canvas canvas, EntityInfo entity, int cx, int cy, int width, int height) {
+            float screenX, screenY;
             float scale = Math.min(width, height) / (RADAR_RANGE * 2f);
-            float screenX = centerX + relX * scale;
-            float screenY = centerY - relY * scale;
 
-            // Clamp to visible area
-            screenX = Math.max(ENTITY_SIZE, Math.min(width - ENTITY_SIZE, screenX));
-            screenY = Math.max(ENTITY_SIZE, Math.min(height - ENTITY_SIZE, screenY));
+            if (playerEntity != null) {
+                // Relative to player
+                float relX = entity.getX() - playerEntity.getX();
+                float relY = entity.getY() - playerEntity.getY();
+                screenX = cx + relX * scale;
+                screenY = cy - relY * scale; // Invert Y
+            } else {
+                // No player reference - use absolute position mod
+                screenX = cx + (entity.getX() % 100) * scale;
+                screenY = cy - (entity.getY() % 100) * scale;
+            }
 
-            // Set tier color
-            int tier = Math.max(0, Math.min(7, entity.getTier() - 1));
-            entityPaint.setColor(TIER_COLORS[tier]);
+            // Clamp to radar area
+            int radarRadius = Math.min(width, height) / 2 - 20;
+            float dx = screenX - cx;
+            float dy = screenY - cy;
+            float dist = (float) Math.sqrt(dx * dx + dy * dy);
+            if (dist > radarRadius) {
+                screenX = cx + (dx / dist) * radarRadius;
+                screenY = cy + (dy / dist) * radarRadius;
+            }
+
+            // Get color based on entity type
+            int color = entity.getDisplayColor();
+            entityPaint.setColor(color);
 
             // Draw enchantment outline if present
             if (entity.getEnchantment() > 0 && entity.getEnchantment() <= 4) {
-                enchantPaint.setColor(ENCHANTMENT_COLORS[entity.getEnchantment()]);
-                canvas.drawCircle(screenX, screenY, ENTITY_SIZE + 2, enchantPaint);
+                enchantPaint.setColor(entity.getEnchantmentColor());
+                canvas.drawCircle(screenX, screenY, ENTITY_SIZE + 3, enchantPaint);
             }
 
-            // Draw entity circle
-            canvas.drawCircle(screenX, screenY, ENTITY_SIZE, entityPaint);
+            // Draw entity
+            float size = ENTITY_SIZE;
+            if (entity.getType() == EntityInfo.EntityType.BOSS || 
+                entity.getType() == EntityInfo.EntityType.MINI_BOSS) {
+                size = ENTITY_SIZE + 4;
+            }
+            canvas.drawCircle(screenX, screenY, size, entityPaint);
 
-            // Draw name if available
+            // Draw name/tier
+            String label = null;
             if (entity.getName() != null && !entity.getName().isEmpty()) {
-                canvas.drawText(entity.getName(), screenX - 20, screenY - ENTITY_SIZE - 5, textPaint);
+                label = entity.getName();
+            } else if (entity.getTier() > 0) {
+                label = "T" + entity.getTier();
+                if (entity.getEnchantment() > 0) {
+                    label += "." + entity.getEnchantment();
+                }
+            }
+
+            if (label != null) {
+                textPaint.setTextSize(10f);
+                float textWidth = textPaint.measureText(label);
+                canvas.drawText(label, screenX - textWidth / 2, screenY - size - 5, textPaint);
             }
         }
     }
