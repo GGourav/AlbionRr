@@ -8,15 +8,11 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     
     <!-- VPN service permission -->
-    <uses-permission android:name="android.permission.BIND_VPN_SERVICE"
-        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.BIND_VPN_SERVICE" />
     
     <!-- Foreground service permission -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    
-    <!-- Overlay permission for floating radar -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     
     <!-- Storage for PCAP export -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -63,8 +59,7 @@
             android:name=".network.PacketCaptureService"
             android:exported="false"
             android:permission="android.permission.BIND_VPN_SERVICE"
-            android:foregroundServiceType="specialUse"
-            tools:ignore="ExportedService">
+            android:foregroundServiceType="specialUse">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
