@@ -27,16 +27,6 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * VPN-based packet capture service for non-rooted devices.
  * Captures UDP packets to/from Albion Online servers (port 5056).
- *
- * IMPORTANT: Albion Online now uses Protocol18 (GpBinaryV18) since April 2026 patch!
- * Protocol16 is deprecated and will NOT work.
- *
- * Key changes in Protocol18:
- * - Type codes are NUMERIC (0-42), not ASCII
- * - Varint encoding for integers and lengths
- * - Little-Endian for primitives
- * - Zero-value type codes (no payload needed)
- * - Bit-packed boolean arrays
  */
 public class PacketCaptureService extends VpnService {
 
@@ -57,20 +47,23 @@ public class PacketCaptureService extends VpnService {
     private Thread captureThread;
     private volatile boolean running = false;
 
-    private Protocol18Parser parser;  // Using Protocol18!
+    private Protocol18Parser parser;
     private ConcurrentHashMap<Long, EntityInfo> entityMap;
     private EntityInfo playerEntity;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.i(TAG, "Service onCreate - Using Protocol18 (GpBinaryV18)");
+        Log.i(TAG, "Service onCreate - Using Protocol18");
 
-        // Use Protocol18 parser (REQUIRED after April 2026 patch!)
-        parser = new Protocol18Parser();
-        entityMap = new ConcurrentHashMap<>();
-
-        createNotificationChannel();
+        try {
+            parser = new Protocol18Parser();
+            entityMap = new ConcurrentHashMap<>();
+            createNotificationChannel();
+            Log.i(TAG, "Service initialized successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Error in onCreate: " + e.getMessage());
+        }
     }
 
     @Override
@@ -106,20 +99,24 @@ public class PacketCaptureService extends VpnService {
             return;
         }
 
-        startForeground(NOTIFICATION_ID, createNotification());
+        try {
+            startForeground(NOTIFICATION_ID, createNotification());
+            Log.i(TAG, "Foreground service started");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to start foreground: " + e.getMessage());
+            return;
+        }
 
         running = true;
 
-        // Build VPN interface - capture all UDP traffic
-        Builder builder = new Builder()
-                .setSession("Albion Radar")
-                .addAddress("10.0.0.2", 32)
-                .addRoute("0.0.0.0", 0);
-
-        // Don't restrict to specific app - causes issues on some devices
-        // Let the VPN capture all traffic and filter by port
-
         try {
+            // Build VPN interface
+            Builder builder = new Builder()
+                    .setSession("Albion Radar")
+                    .addAddress("10.0.0.2", 32)
+                    .addRoute("0.0.0.0", 0)
+                    .setMtu(1500);
+
             vpnInterface = builder.establish();
             Log.i(TAG, "VPN interface established: " + (vpnInterface != null));
         } catch (Exception e) {
@@ -129,7 +126,7 @@ public class PacketCaptureService extends VpnService {
         }
 
         if (vpnInterface == null) {
-            Log.e(TAG, "VPN interface is null");
+            Log.e(TAG, "VPN interface is null - VPN permission may have been revoked");
             stopCapture();
             return;
         }
@@ -137,7 +134,7 @@ public class PacketCaptureService extends VpnService {
         captureThread = new Thread(this::capturePackets);
         captureThread.start();
 
-        Log.i(TAG, "Packet capture started successfully - Protocol18 active");
+        Log.i(TAG, "Packet capture started successfully");
     }
 
     private void stopCapture() {
@@ -164,12 +161,16 @@ public class PacketCaptureService extends VpnService {
             vpnInterface = null;
         }
 
-        stopForeground(true);
+        try {
+            stopForeground(true);
+        } catch (Exception e) {
+            Log.e(TAG, "Error stopping foreground: " + e.getMessage());
+        }
         stopSelf();
     }
 
     private void capturePackets() {
-        Log.i(TAG, "Capture thread started - Protocol18 parsing");
+        Log.i(TAG, "Capture thread started");
 
         FileInputStream in = new FileInputStream(vpnInterface.getFileDescriptor());
         FileOutputStream out = new FileOutputStream(vpnInterface.getFileDescriptor());
@@ -177,8 +178,6 @@ public class PacketCaptureService extends VpnService {
         byte[] packet = new byte[32767];
         int packetCount = 0;
         int albionPacketCount = 0;
-        int parsedCount = 0;
-        int entityCount = 0;
 
         while (running && !Thread.currentThread().isInterrupted()) {
             try {
@@ -231,14 +230,7 @@ public class PacketCaptureService extends VpnService {
                         // Only parse server responses (srcPort == 5056)
                         if (srcPort == ALBION_PORT) {
                             try {
-                                int entitiesBefore = entityMap.size();
                                 parsePhotonPacket(payload);
-                                int entitiesAfter = entityMap.size();
-
-                                if (entitiesAfter > entitiesBefore) {
-                                    parsedCount++;
-                                    entityCount += (entitiesAfter - entitiesBefore);
-                                }
                             } catch (Exception e) {
                                 Log.w(TAG, "Parse error: " + e.getMessage());
                             }
@@ -267,31 +259,24 @@ public class PacketCaptureService extends VpnService {
             // Ignore
         }
 
-        Log.i(TAG, "Capture thread ended. Total packets: " + packetCount +
-              ", Albion packets: " + albionPacketCount +
-              ", Parsed: " + parsedCount +
-              ", Entities found: " + entityCount);
+        Log.i(TAG, "Capture thread ended. Total packets: " + packetCount + ", Albion: " + albionPacketCount);
     }
 
     private void parsePhotonPacket(byte[] payload) {
-        // Use Protocol18 parser
+        if (parser == null) return;
+        
         List<EntityInfo> entities = parser.parsePacket(payload);
 
         if (entities.isEmpty()) return;
 
         for (EntityInfo entity : entities) {
             if (!entity.isValid()) {
-                // Entity left - remove from map
                 entityMap.remove(entity.getId());
-                Log.d(TAG, "Entity left: " + entity.getId());
             } else {
-                // Update or add entity
                 entityMap.put(entity.getId(), entity);
 
-                // Track player entity
                 if (entity.getType() == EntityInfo.EntityType.PLAYER) {
                     playerEntity = entity;
-                    Log.d(TAG, "Player at: " + entity.getX() + ", " + entity.getY());
                 }
             }
         }
@@ -306,17 +291,19 @@ public class PacketCaptureService extends VpnService {
     }
 
     private void broadcastUpdate() {
-        ArrayList<EntityInfo> entityList = new ArrayList<>(entityMap.values());
+        try {
+            ArrayList<EntityInfo> entityList = new ArrayList<>(entityMap.values());
 
-        Intent intent = new Intent(ACTION_ENTITY_UPDATE);
-        intent.putParcelableArrayListExtra(EXTRA_ENTITIES, entityList);
-        if (playerEntity != null) {
-            intent.putExtra(EXTRA_PLAYER, playerEntity);
+            Intent intent = new Intent(ACTION_ENTITY_UPDATE);
+            intent.putParcelableArrayListExtra(EXTRA_ENTITIES, entityList);
+            if (playerEntity != null) {
+                intent.putExtra(EXTRA_PLAYER, playerEntity);
+            }
+
+            sendBroadcast(intent);
+        } catch (Exception e) {
+            Log.e(TAG, "Error broadcasting: " + e.getMessage());
         }
-
-        sendBroadcast(intent);
-
-        Log.d(TAG, "Broadcasting " + entityList.size() + " entities");
     }
 
     private void createNotificationChannel() {
@@ -326,7 +313,7 @@ public class PacketCaptureService extends VpnService {
                     "Albion Radar",
                     NotificationManager.IMPORTANCE_LOW
             );
-            channel.setDescription("Radar is running - Protocol18 (GpBinaryV18)");
+            channel.setDescription("Radar is running - Protocol18");
             channel.setShowBadge(false);
 
             NotificationManager manager = getSystemService(NotificationManager.class);
