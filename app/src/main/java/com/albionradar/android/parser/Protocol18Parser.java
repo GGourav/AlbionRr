@@ -131,7 +131,7 @@ public class Protocol18Parser {
             int flags = readUint8();
             int commandCount = readUint8();
             long timestamp = readUint32BE();
-            int challenge = readUint32BE();
+            int challenge = (int) readUint32BE();  // Fixed: explicit cast
 
             if (DEBUG) Log.d(TAG, String.format("Packet: peer=%d flags=%d cmds=%d", peerId, flags, commandCount));
 
@@ -164,8 +164,8 @@ public class Protocol18Parser {
         int channelId = readUint8();
         int cmdFlags = readUint8();
         position++; // reserved
-        int cmdLength = readUint32BE();
-        int seqNumber = readUint32BE();
+        int cmdLength = (int) readUint32BE();  // Fixed: explicit cast
+        int seqNumber = (int) readUint32BE();  // Fixed: explicit cast
 
         int payloadLen = cmdLength - 12;
         if (payloadLen <= 0 || position + payloadLen > data.length) {
@@ -240,11 +240,11 @@ public class Protocol18Parser {
         // [startSeq:4][fragCount:4][fragNum:4][totalLen:4][fragOffset:4]
         if (payloadLen < 20) return;
 
-        int startSeq = readUint32BE();
+        int startSeq = (int) readUint32BE();  // Fixed: explicit cast
         position += 4; // fragCount
         position += 4; // fragNum
-        int totalLen = readUint32BE();
-        int fragOffset = readUint32BE();
+        int totalLen = (int) readUint32BE();  // Fixed: explicit cast
+        int fragOffset = (int) readUint32BE();  // Fixed: explicit cast
 
         int fragDataLen = payloadLen - 20;
         if (fragDataLen <= 0 || totalLen > MAX_ARRAY_SIZE * 16) return;
