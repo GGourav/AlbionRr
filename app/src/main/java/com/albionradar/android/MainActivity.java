@@ -3,11 +3,9 @@ package com.albionradar.android;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
-import android.net.Uri;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.TextView;
@@ -25,7 +23,6 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
     private static final int VPN_REQUEST_CODE = 0x0F;
-    private static final int OVERLAY_REQUEST_CODE = 0x10;
 
     private Button startButton;
     private Button settingsButton;
@@ -85,31 +82,9 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // Check overlay permission first
-        if (!Settings.canDrawOverlays(this)) {
-            Log.d(TAG, "Requesting overlay permission");
-            requestOverlayPermission();
-            return;
-        }
-
-        // Then request VPN permission
+        // Request VPN permission
         Log.d(TAG, "Requesting VPN permission");
         requestVpnPermission();
-    }
-
-    private void requestOverlayPermission() {
-        try {
-            Intent intent = new Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:" + getPackageName())
-            );
-            startActivityForResult(intent, OVERLAY_REQUEST_CODE);
-            Toast.makeText(this, "Please grant overlay permission", Toast.LENGTH_LONG).show();
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to request overlay permission: " + e.getMessage());
-            // Continue without overlay
-            requestVpnPermission();
-        }
     }
 
     private void requestVpnPermission() {
@@ -132,14 +107,7 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         Log.d(TAG, "onActivityResult: requestCode=" + requestCode + ", resultCode=" + resultCode);
 
-        if (requestCode == OVERLAY_REQUEST_CODE) {
-            if (Settings.canDrawOverlays(this)) {
-                requestVpnPermission();
-            } else {
-                Toast.makeText(this, "Overlay permission denied. Continuing anyway...", Toast.LENGTH_SHORT).show();
-                requestVpnPermission();
-            }
-        } else if (requestCode == VPN_REQUEST_CODE) {
+        if (requestCode == VPN_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
                 startRadarService();
             } else {
